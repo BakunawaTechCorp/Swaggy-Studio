@@ -1,0 +1,13 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "next build",
+  "functions": {
+    "app/api/tools/image/route.ts": { "maxDuration": 60 },
+    "app/api/tools/create/route.ts": { "maxDuration": 60 },
+    "app/api/tools/create/refine/route.ts": { "maxDuration": 30 },
+    "app/api/tools/press/route.ts": { "maxDuration": 30 },
+    "app/api/tools/campaign/route.ts": { "maxDuration": 30 },
+    "app/api/tools/caption/route.ts": { "maxDuration": 30 },
+    "app/api/tools/image/save/route.ts": { "maxDuration": 30 }
+  }
+}
