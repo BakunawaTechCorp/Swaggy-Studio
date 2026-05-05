@@ -2,7 +2,14 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSafeRedirectPath } from "@/lib/redirects";
 
-const PUBLIC_PATHS = ["/", "/login", "/signup", "/auth/callback"];
+const PUBLIC_PATHS = [
+  "/",
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/auth/callback",
+  "/auth/reset-password",
+];
 const DEV_BYPASS_AUTH = false;
 
 // Pages that should bounce *authenticated* users back into the app.

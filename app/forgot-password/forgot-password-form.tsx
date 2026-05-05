@@ -1,17 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { getSafeRedirectPath } from "@/lib/redirects";
 
-export function LoginForm() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -19,18 +14,37 @@ export function LoginForm() {
     if (submitting) return;
     setError(null);
     setSubmitting(true);
+
     const supabase = createClient();
-    const { error: err } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    const { error: err } = await supabase.auth.resetPasswordForEmail(
+      email.trim(),
+      {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      }
+    );
+
     if (err) {
       setError(err.message);
       setSubmitting(false);
       return;
     }
-    router.push(getSafeRedirectPath(searchParams.get("redirectTo")));
-    router.refresh();
+
+    setSent(true);
+    setSubmitting(false);
+  }
+
+  if (sent) {
+    return (
+      <div className="flex w-full flex-col gap-3 text-center">
+        <p className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-4 text-sm text-emerald-200">
+          Check <span className="font-medium">{email}</span> for a reset link.
+          It expires in 1 hour.
+        </p>
+        <p className="text-xs text-white/50">
+          Didn&apos;t get it? Check spam, or try again in a minute.
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -41,6 +55,10 @@ export function LoginForm() {
         </p>
       )}
 
+      <p className="text-center text-sm text-white/60">
+        Enter your email and we&apos;ll send you a link to reset your password.
+      </p>
+
       <input
         type="email"
         autoComplete="email"
@@ -50,25 +68,6 @@ export function LoginForm() {
         onChange={(e) => setEmail(e.target.value)}
         className="h-11 w-full rounded-[10px] border border-white/10 bg-black/30 px-4 text-sm text-white placeholder:text-white/30 focus:border-brand-purple focus:outline-none focus:ring-1 focus:ring-brand-purple"
       />
-      <input
-        type="password"
-        autoComplete="current-password"
-        required
-        minLength={6}
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        className="h-11 w-full rounded-[10px] border border-white/10 bg-black/30 px-4 text-sm text-white placeholder:text-white/30 focus:border-brand-purple focus:outline-none focus:ring-1 focus:ring-brand-purple"
-      />
-
-      <div className="flex justify-end -mt-1">
-        <Link
-          href="/forgot-password"
-          className="text-xs text-white/60 transition-colors duration-200 hover:text-[#c084fc]"
-        >
-          Forgot password?
-        </Link>
-      </div>
 
       <button
         type="submit"
@@ -79,7 +78,7 @@ export function LoginForm() {
             "linear-gradient(135deg, #7b2ff7 0%, #f059c0 100%)",
         }}
       >
-        {submitting ? "Signing in…" : "Sign in"}
+        {submitting ? "Sending…" : "Send reset link"}
       </button>
     </form>
   );
