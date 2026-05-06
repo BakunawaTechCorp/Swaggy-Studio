@@ -51,7 +51,18 @@ function GenerationView({ result, brief }: Props) {
     );
   }
 
-  async function pickImage(idx: number) {
+  // Visually select an image. Doesn't save — saving is a separate explicit
+  // action so users can pick → tweak with a prompt → save the version they
+  // actually want.
+  function selectImage(idx: number) {
+    const v = variants[idx];
+    if (!v?.image) return;
+    setPickedImageIdx(idx);
+  }
+
+  async function saveSelectedImage() {
+    const idx = pickedImageIdx;
+    if (idx === null) return;
     const v = variants[idx];
     if (!v?.image) return;
     setSavingImage(true);
@@ -63,7 +74,6 @@ function GenerationView({ result, brief }: Props) {
       });
       if (!res.ok) throw new Error(String(res.status));
       const json = (await res.json()) as { url: string };
-      setPickedImageIdx(idx);
 
       void fetch("/api/library", {
         method: "POST",
@@ -138,17 +148,12 @@ function GenerationView({ result, brief }: Props) {
 
   // ---------- Refines ----------
 
-  // Default the image-refine target to the picked card, otherwise the first
-  // card with a successful render.
-  function targetImageIdx(): number | null {
-    if (pickedImageIdx !== null) return pickedImageIdx;
-    const i = variants.findIndex((v) => v.image);
-    return i === -1 ? null : i;
-  }
-
   async function regenerateImage() {
-    const idx = targetImageIdx();
-    if (idx === null) return;
+    const idx = pickedImageIdx;
+    if (idx === null) {
+      show("Pick an image first.", "error");
+      return;
+    }
     const target = variants[idx];
     if (!target) return;
     if (!imageFeedback.trim()) {
@@ -262,7 +267,14 @@ function GenerationView({ result, brief }: Props) {
 
       {variants.length > 0 && (
         <section className="create-section">
-          <h3 className="create-section-title">Pick an image</h3>
+          <h3 className="create-section-title">
+            {pickedImageIdx === null ? "Pick an image" : "Selected image"}
+          </h3>
+          <p className="create-section-sub muted">
+            {pickedImageIdx === null
+              ? "Click one to select it. Then tweak it with a prompt or save it to your Library."
+              : "Tweak it below to generate a new version, or save it as-is."}
+          </p>
           <div className="create-image-grid">
             {variants.map((v, idx) => (
               <button
@@ -271,8 +283,9 @@ function GenerationView({ result, brief }: Props) {
                 className={`create-image-card ${
                   pickedImageIdx === idx ? "is-picked" : ""
                 }`}
-                onClick={() => pickImage(idx)}
-                disabled={savingImage || refiningImage || !v.image}
+                onClick={() => selectImage(idx)}
+                disabled={refiningImage || !v.image}
+                aria-pressed={pickedImageIdx === idx}
               >
                 {v.image ? (
                   <img
@@ -283,11 +296,35 @@ function GenerationView({ result, brief }: Props) {
                 ) : (
                   <div className="create-image-failed">Image failed</div>
                 )}
+                {pickedImageIdx === idx && (
+                  <div className="create-image-badge">Selected</div>
+                )}
                 <div className="create-image-label">{v.label}</div>
                 <div className="create-image-rationale">{v.rationale}</div>
               </button>
             ))}
           </div>
+
+          {pickedImageIdx !== null && (
+            <div className="create-image-actions">
+              <button
+                type="button"
+                className="btn-ghost-sm"
+                onClick={saveSelectedImage}
+                disabled={savingImage}
+              >
+                <Save size={12} /> {savingImage ? "Saving…" : "Save to Library"}
+              </button>
+              <button
+                type="button"
+                className="btn-ghost-sm"
+                onClick={() => setPickedImageIdx(null)}
+                disabled={savingImage || refiningImage}
+              >
+                Clear selection
+              </button>
+            </div>
+          )}
 
           <JoestarRefine
             kind="image"
@@ -297,11 +334,11 @@ function GenerationView({ result, brief }: Props) {
             busy={refiningImage}
             hint={
               pickedImageIdx !== null
-                ? "Refining the image you picked."
-                : "Refining the first image. Pick one to target a specific variant."
+                ? "Generate a new image based on the one you picked."
+                : "Pick an image above first, then describe what to change."
             }
             placeholder="e.g. warmer lighting, more empty space on the left, less product focus, softer mood…"
-            disabled={targetImageIdx() === null}
+            disabled={pickedImageIdx === null}
           />
         </section>
       )}
