@@ -1090,3 +1090,84 @@ begin
       where username is not null;
   end if;
 end $$;
+
+-- =====================================================================
+-- User role hierarchy: master > admin > premium > trial > free
+-- =====================================================================
+alter table public.user_settings
+  add column if not exists role text not null default 'free';
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'user_settings_role_check'
+  ) then
+    alter table public.user_settings
+      add constraint user_settings_role_check
+      check (role in ('master', 'admin', 'premium', 'trial', 'free'));
+  end if;
+end $$;
+
+-- Bootstrap: bakunawatechcorp@gmail.com is the master user.
+-- Idempotent — no-op if the auth row doesn't exist yet (user signs up later).
+do $$
+declare
+  master_uid uuid;
+begin
+  select id into master_uid
+    from auth.users
+    where lower(email) = 'bakunawatechcorp@gmail.com'
+    limit 1;
+  if master_uid is not null then
+    insert into public.user_settings (user_id, role, is_master, unlimited_credits)
+    values (master_uid, 'master', true, true)
+    on conflict (user_id) do update
+      set role = 'master',
+          is_master = true,
+          unlimited_credits = true;
+  end if;
+end $$;
+
+-- Trigger that auto-promotes the master email if they sign up after schema
+-- has been applied. Runs after a new auth.users row is created.
+create or replace function public.bootstrap_master_role()
+returns trigger language plpgsql security definer as $$
+begin
+  if lower(new.email) = 'bakunawatechcorp@gmail.com' then
+    insert into public.user_settings (user_id, role, is_master, unlimited_credits)
+    values (new.id, 'master', true, true)
+    on conflict (user_id) do update
+      set role = 'master',
+          is_master = true,
+          unlimited_credits = true;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists user_settings_bootstrap_master on auth.users;
+create trigger user_settings_bootstrap_master
+  after insert on auth.users
+  for each row execute function public.bootstrap_master_role();
+
+-- RLS: master + admin can read all rows in user_settings (for the user
+-- management panel). Other users continue to read only their own.
+drop policy if exists "user_settings_admin_read_all" on public.user_settings;
+create policy "user_settings_admin_read_all" on public.user_settings
+  for select using (
+    exists (
+      select 1 from public.user_settings me
+      where me.user_id = auth.uid()
+        and me.role in ('master', 'admin')
+    )
+  );
+
+-- master can update any row's role; admin can update non-master rows.
+drop policy if exists "user_settings_admin_update_role" on public.user_settings;
+create policy "user_settings_admin_update_role" on public.user_settings
+  for update using (
+    exists (
+      select 1 from public.user_settings me
+      where me.user_id = auth.uid()
+        and me.role in ('master', 'admin')
+    )
+  );
